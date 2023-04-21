@@ -11,8 +11,10 @@ import (
 )
 
 func createRandomAccount(t *testing.T) Account {
+	user := createRandomUser(t)
+
 	arg := CreateAccountParams{
-		Owner: util.RandomOwner(),
+		Owner: user.Username,
 		Balance: util.RandomMoney(),
 		Currency: util.RandomCurrency(),
 	}
@@ -82,12 +84,12 @@ func TestListAccounts(t *testing.T) {
 		createRandomAccount(t)
 	}
 
-	arg := ListAccountParams{
+	arg := ListAccountsParams{
 		Limit: 5,
 		Offset: 5,
 	}
 
-	accounts, err := testQueries.ListAccount(context.Background(), arg)
+	accounts, err := testQueries.ListAccounts(context.Background(), arg)
 	require.NoError(t, err)
 	require.Len(t, accounts, 5)
 
