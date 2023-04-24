@@ -2,11 +2,13 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 	db "github.com/techschool/simplebank/db/sqlc"
+	"github.com/techschool/simplebank/token"
 )
 
 type createAccountRequest struct {
@@ -21,10 +23,11 @@ func (server *Server) createAccount(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 	arg := db.CreateAccountParams{
-		Owner: req.Owner,
+		Owner:    authPayload.Username,
 		Currency: req.Currency,
-		Balance: 0,
+		Balance:  0,
 	}
 
 	account, err := server.store.CreateAccount(ctx, arg)
@@ -37,7 +40,6 @@ func (server *Server) createAccount(ctx *gin.Context) {
 			}
 		}
 
-		
 	}
 
 	ctx.JSON(http.StatusOK, account)
@@ -58,9 +60,16 @@ func (server *Server) getAccount(ctx *gin.Context) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			ctx.JSON(http.StatusNotFound, errorResponse(err))
-			return 	
+			return
 		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	if account.Owner != authPayload.Username {
+		err := errors.New("account doesn't belong to the authenticated user")
+		ctx.JSON(http.StatusUnauthorized, errorResponse(err))
 		return
 	}
 
@@ -68,7 +77,7 @@ func (server *Server) getAccount(ctx *gin.Context) {
 }
 
 type getAccountsRequest struct {
-	Page int32 `form:"page" binding:"required,min=1"`
+	Page  int32 `form:"page" binding:"required,min=1"`
 	Limit int32 `form:"limit" binding:"required,min=1,max=5"`
 }
 
@@ -79,14 +88,16 @@ func (server *Server) getAccounts(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 	arg := db.ListAccountsParams{
-		Limit: req.Limit,
+		Owner:  authPayload.Username,
+		Limit:  req.Limit,
 		Offset: (req.Page - 1) * req.Limit,
 	}
 	accounts, err := server.store.ListAccounts(ctx, arg)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-		return 
+		return
 	}
 
 	ctx.JSON(http.StatusOK, accounts)
